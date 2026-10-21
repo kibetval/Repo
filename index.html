@@ -1,0 +1,831 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deriv Digit Algorithmic Trading Signal Terminal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            darkBg: '#090d16',
+            darkCard: '#111827',
+            darkBorder: '#1f2937',
+            brandBlue: '#3b82f6',
+            brandRed: '#ef4444',
+            brandGreen: '#10b981',
+            brandYellow: '#f59e0b',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body { background: #090d16; color: #f3f4f6; font-family: 'Inter', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+    .bar-transition { transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .pulse-glow-blue { animation: pulseBlue 1.2s infinite alternate; }
+    .pulse-glow-red { animation: pulseRed 1.2s infinite alternate; }
+    @keyframes pulseBlue {
+      0% { box-shadow: 0 0 10px rgba(59,130,246,0.3); border-color: #3b82f6; }
+      100% { box-shadow: 0 0 30px rgba(59,130,246,0.8); border-color: #60a5fa; }
+    }
+    @keyframes pulseRed {
+      0% { box-shadow: 0 0 10px rgba(239,68,68,0.3); border-color: #ef4444; }
+      100% { box-shadow: 0 0 30px rgba(239,68,68,0.8); border-color: #f87171; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-blue-600 selection:text-white">
+
+  <!-- HEADER -->
+  <header class="bg-darkCard/90 backdrop-blur-md border-b border-darkBorder sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-900/30">
+          <i class="fa-solid fa-chart-line"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-base sm:text-lg leading-none text-white tracking-wide flex items-center gap-2">
+            DERIV <span class="text-blue-500 font-mono text-xs px-2 py-0.5 bg-blue-500/10 rounded border border-blue-500/30">DIGIT PRO</span>
+          </h1>
+          <p class="text-xs text-gray-400">Algorithmic Live Signal Terminal</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- MODE TOGGLE -->
+        <div class="flex items-center bg-darkBg border border-darkBorder rounded-lg p-1 text-xs">
+          <button id="liveModeBtn" onclick="setMode('live')" class="px-2.5 py-1 rounded font-semibold text-white bg-blue-600 transition-all">Live WS</button>
+          <button id="simModeBtn" onclick="setMode('sim')" class="px-2.5 py-1 rounded font-semibold text-gray-400 hover:text-white transition-all">Simulation</button>
+        </div>
+
+        <div class="hidden md:flex items-center bg-darkBg border border-darkBorder rounded-lg px-2.5 py-1">
+          <span class="text-xs font-mono text-gray-400 mr-2">APP_ID:</span>
+          <input id="appIdInput" type="text" value="1089" class="bg-transparent text-xs font-mono text-white focus:outline-none w-14" placeholder="1089" />
+        </div>
+
+        <div id="statusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800/50 text-xs font-medium text-gray-300">
+          <span class="w-2.5 h-2.5 rounded-full bg-gray-500 inline-block" id="statusDot"></span>
+          <span id="statusText" class="font-mono">Disconnected</span>
+        </div>
+
+        <button id="startBtn" onclick="startTerminal()" class="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all shadow-lg hover:shadow-emerald-900/40 active:scale-[0.98]">
+          <i class="fa-solid fa-play text-xs"></i>
+          <span class="hidden sm:inline">START BOT</span>
+        </button>
+        <button id="stopBtn" onclick="stopTerminal(true, true)" disabled class="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-rose-900/30 border border-rose-800/40 text-gray-400 font-semibold text-xs transition-all opacity-50 cursor-not-allowed">
+          <i class="fa-solid fa-square text-xs"></i>
+          <span class="hidden sm:inline">STOP BOT</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN BODY -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1 flex flex-col gap-6">
+
+    <!-- CONTROLS -->
+    <section class="bg-darkCard border border-darkBorder rounded-xl p-4 sm:p-5 shadow-xl">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            <i class="fa-solid fa-sliders text-blue-400 mr-1.5"></i>Contract Type
+          </label>
+          <select id="contractTypeSelect" onchange="onContractTypeChange()" class="w-full bg-darkBg border border-darkBorder text-white text-sm rounded-lg px-3.5 py-2.5 focus:border-blue-500 outline-none">
+            <option value="EVEN_ODD" selected>Even / Odd</option>
+            <option value="OVER_UNDER">Over / Under</option>
+            <option value="MATCHES_DIFFERS">Matches / Differs</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            <i class="fa-solid fa-wave-square text-blue-400 mr-1.5"></i>Volatility Index
+          </label>
+          <select id="symbolSelect" onchange="onSymbolChange()" class="w-full bg-darkBg border border-darkBorder text-white text-sm rounded-lg px-3.5 py-2.5 focus:border-blue-500 outline-none">
+            <option value="R_10">Volatility 10 Index (R_10)</option>
+            <option value="R_25">Volatility 25 Index (R_25)</option>
+            <option value="R_50" selected>Volatility 50 Index (R_50)</option>
+            <option value="R_75">Volatility 75 Index (R_75)</option>
+            <option value="R_100">Volatility 100 Index (R_100)</option>
+            <option value="1HZ10V">Volatility 10 (1s) Index (1HZ10V)</option>
+            <option value="1HZ25V">Volatility 25 (1s) Index (1HZ25V)</option>
+            <option value="1HZ50V">Volatility 50 (1s) Index (1HZ50V)</option>
+            <option value="1HZ75V">Volatility 75 (1s) Index (1HZ75V)</option>
+            <option value="1HZ100V">Volatility 100 (1s) Index (1HZ100V)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            <i class="fa-solid fa-bullseye text-blue-400 mr-1.5"></i>Barrier / Target Digit
+          </label>
+          <div class="flex items-center gap-2">
+            <input id="barrierInput" type="number" min="0" max="9" value="4" onchange="onContractTypeChange(); updateAnalyticsUI();" class="w-full bg-darkBg border border-darkBorder text-white text-sm rounded-lg px-3.5 py-2.5 focus:border-blue-500 outline-none" />
+            <span class="text-xs text-gray-500 font-mono italic whitespace-nowrap">Target Barrier</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIVE DIGIT FREQUENCY GRID -->
+    <section class="bg-darkCard border border-darkBorder rounded-xl p-4 sm:p-5 shadow-xl flex flex-col gap-4">
+      <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-darkBorder/60 pb-3">
+        <div>
+          <h2 class="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+            <i class="fa-solid fa-chart-column text-blue-500"></i> LIVE DIGIT DISTRIBUTION FREQUENCY
+          </h2>
+          <p class="text-xs text-gray-400">Rolling window of last <span class="font-mono text-blue-400 font-bold" id="sampleCountDisplay">0</span> ticks</p>
+        </div>
+
+        <div class="flex items-center gap-3 text-xs font-mono">
+          <div class="bg-darkBg px-3 py-1.5 rounded-lg border border-darkBorder flex items-center gap-2">
+            <span class="text-gray-400">EVEN:</span>
+            <span id="evenPercentage" class="text-blue-400 font-bold">0.0%</span>
+          </div>
+          <div class="bg-darkBg px-3 py-1.5 rounded-lg border border-darkBorder flex items-center gap-2">
+            <span class="text-gray-400">ODD:</span>
+            <span id="oddPercentage" class="text-rose-400 font-bold">0.0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="digitsGrid" class="grid grid-cols-5 sm:grid-cols-10 gap-2 sm:gap-2.5 py-2"></div>
+    </section>
+
+    <!-- SIGNAL TERMINAL & DECISION ENGINE -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- GLOW CIRCLES -->
+      <div class="bg-darkCard border border-darkBorder rounded-xl p-5 shadow-xl flex flex-col justify-between items-center relative overflow-hidden">
+        <div class="w-full flex justify-between items-center border-b border-darkBorder pb-2 mb-4">
+          <span class="text-xs font-bold text-gray-400 tracking-wider uppercase"><i class="fa-solid fa-bolt text-yellow-400 mr-1.5"></i>Signal State Trigger</span>
+          <span class="text-xs font-mono text-gray-400" id="lastTickDisplay">Tick: --</span>
+        </div>
+
+        <div class="flex items-center justify-center gap-6 sm:gap-8 my-4">
+          <div class="flex flex-col items-center gap-2">
+            <div id="blueCircle" class="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-gray-800 bg-blue-950/20 flex flex-col items-center justify-center transition-all duration-300">
+              <span id="blueCircleLabel" class="text-xs sm:text-sm font-bold text-gray-400 font-mono text-center px-1">EVEN</span>
+              <span id="blueCircleVal" class="text-[10px] sm:text-xs font-mono text-blue-400 mt-1">IDLE</span>
+            </div>
+            <span class="text-xs font-semibold text-blue-400">POSITIVE STATE</span>
+          </div>
+
+          <div class="flex flex-col items-center gap-2">
+            <div id="redCircle" class="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-gray-800 bg-rose-950/20 flex flex-col items-center justify-center transition-all duration-300">
+              <span id="redCircleLabel" class="text-xs sm:text-sm font-bold text-gray-400 font-mono text-center px-1">ODD</span>
+              <span id="redCircleVal" class="text-[10px] sm:text-xs font-mono text-rose-400 mt-1">IDLE</span>
+            </div>
+            <span class="text-xs font-semibold text-rose-400">NEGATIVE STATE</span>
+          </div>
+        </div>
+
+        <div class="w-full bg-darkBg border border-darkBorder rounded-lg p-3 flex justify-between items-center mt-2">
+          <span class="text-xs text-gray-400 font-semibold">SIGNAL EXPIRY TIMER:</span>
+          <span id="timerDisplay" class="font-mono font-bold text-amber-400 text-sm">--</span>
+        </div>
+      </div>
+
+      <!-- DECISION ENGINE -->
+      <div class="lg:col-span-2 bg-darkCard border border-darkBorder rounded-xl p-5 shadow-xl flex flex-col justify-between">
+        <div class="flex justify-between items-center border-b border-darkBorder pb-3">
+          <div>
+            <h3 class="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+              <i class="fa-solid fa-microchip text-blue-400"></i> AUTOMATED SIGNAL DECISION ENGINE
+            </h3>
+            <p class="text-xs text-gray-400">Strategy matrix confidence score & execution trigger</p>
+          </div>
+          <div id="signalBadge" class="px-3 py-1 rounded border border-gray-700 bg-gray-800 text-xs font-mono text-gray-400 font-bold">
+            NEUTRAL
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 my-4">
+          <div class="bg-darkBg border border-darkBorder rounded-lg p-3.5 flex flex-col">
+            <span class="text-xs text-gray-400 font-semibold mb-1">RECOMMENDED ACTION</span>
+            <span id="recommendedAction" class="text-lg font-bold font-mono text-white">NO SIGNAL</span>
+          </div>
+
+          <div class="bg-darkBg border border-darkBorder rounded-lg p-3.5 flex flex-col">
+            <span class="text-xs text-gray-400 font-semibold mb-1">TARGET PREDICTION</span>
+            <span id="targetPrediction" class="text-lg font-bold font-mono text-blue-400">--</span>
+          </div>
+
+          <div class="bg-darkBg border border-darkBorder rounded-lg p-3.5 flex flex-col">
+            <span class="text-xs text-gray-400 font-semibold mb-1">CONFIDENCE SCORE</span>
+            <div class="flex items-center justify-between">
+              <span id="confidenceScore" class="text-lg font-bold font-mono text-amber-400">0%</span>
+              <div class="w-16 bg-gray-800 h-2 rounded-full overflow-hidden">
+                <div id="confidenceBar" class="bg-amber-400 h-full w-0 transition-all duration-300"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-blue-950/20 border border-blue-900/40 rounded-lg p-3">
+          <p id="strategyRationale" class="text-xs text-blue-200/80 leading-relaxed font-sans">
+            Start the bot to connect to Deriv WebSocket feed or switch to Simulation mode. The algorithmic engine will evaluate ticks in real-time.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRADE LOGS -->
+    <section class="bg-darkCard border border-darkBorder rounded-xl p-4 sm:p-5 shadow-xl flex flex-col gap-3">
+      <div class="flex justify-between items-center border-b border-darkBorder pb-3">
+        <h3 class="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+          <i class="fa-solid fa-list-check text-emerald-400"></i> REAL-TIME SIGNAL LOGS
+        </h3>
+        <button onclick="clearLogs()" class="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+          <i class="fa-solid fa-trash-can"></i> Clear Log
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="bg-darkBg text-gray-400 uppercase border-b border-darkBorder">
+            <tr>
+              <th class="py-2.5 px-3">Timestamp</th>
+              <th class="py-2.5 px-3">Symbol</th>
+              <th class="py-2.5 px-3">Contract</th>
+              <th class="py-2.5 px-3">Tick Quote</th>
+              <th class="py-2.5 px-3">Digit</th>
+              <th class="py-2.5 px-3">Signal</th>
+              <th class="py-2.5 px-3">Confidence</th>
+            </tr>
+          </thead>
+          <tbody id="logsTableBody" class="divide-y divide-darkBorder text-gray-300">
+            <tr><td colspan="7" class="py-4 text-center text-gray-500 italic font-sans">No signals generated yet. Click "Start Bot" to activate.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bg-darkCard border-t border-darkBorder py-4 mt-6">
+    <div class="max-w-7xl mx-auto px-4 text-center text-xs text-gray-500 flex flex-col sm:flex-row justify-between items-center gap-2">
+      <p>© 2026 Deriv Digit Algorithmic Trading Signal Dashboard. Non-custodial market research terminal.</p>
+      <div class="flex items-center gap-4">
+        <span><i class="fa-solid fa-shield-halved mr-1"></i>WebSockets Secured</span>
+        <span><i class="fa-solid fa-bolt mr-1"></i>0-Auth Public Data</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- CORE JAVASCRIPT LOGIC -->
+  <script>
+    let socket = null;
+    let isConnected = false;
+    let mode = 'live'; // 'live' or 'sim'
+    let activeSymbol = 'R_50';
+    let activeContractType = 'EVEN_ODD';
+    let activeBarrier = 4;
+    let tickHistory = [];
+    let pingInterval = null;
+    let countdownTimer = null;
+    let simInterval = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 3;
+    let isManualStop = false;
+    let audioCtx = null;
+    let pendingSubscription = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderDigitsGrid();
+      onContractTypeChange();
+    });
+
+    function setMode(newMode) {
+      if (mode === newMode) return;
+      stopTerminal(true, true);
+      mode = newMode;
+
+      const liveBtn = document.getElementById('liveModeBtn');
+      const simBtn = document.getElementById('simModeBtn');
+
+      if (mode === 'live') {
+        liveBtn.className = 'px-2.5 py-1 rounded font-semibold text-white bg-blue-600 transition-all';
+        simBtn.className = 'px-2.5 py-1 rounded font-semibold text-gray-400 hover:text-white transition-all';
+      } else {
+        simBtn.className = 'px-2.5 py-1 rounded font-semibold text-white bg-amber-600 transition-all';
+        liveBtn.className = 'px-2.5 py-1 rounded font-semibold text-gray-400 hover:text-white transition-all';
+      }
+    }
+
+    function playBeep(freq = 600, type = 'sine', duration = 0.15) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    function renderDigitsGrid() {
+      const grid = document.getElementById('digitsGrid');
+      grid.innerHTML = '';
+      for (let i = 0; i <= 9; i++) {
+        const card = document.createElement('div');
+        card.id = `digit-card-${i}`;
+        card.className = 'bg-darkBg border border-darkBorder rounded-lg p-2.5 flex flex-col items-center justify-between h-40 sm:h-44 relative overflow-hidden transition-all duration-300';
+        card.innerHTML = `
+          <span id="digit-badge-${i}" class="text-[9px] font-bold px-1.5 py-0.5 rounded opacity-0 transition-opacity uppercase font-mono">-</span>
+          <div class="w-full bg-gray-800/60 rounded-full h-20 sm:h-24 flex items-end justify-center p-0.5 relative overflow-hidden my-1">
+            <div id="digit-bar-${i}" class="w-full bg-blue-600 rounded-full bar-transition h-0" style="height: 0%;"></div>
+            <span id="digit-percent-${i}" class="absolute text-[10px] font-mono font-bold text-white z-10 bottom-1">0%</span>
+          </div>
+          <div class="text-center">
+            <span class="text-sm sm:text-base font-extrabold font-mono text-gray-200">${i}</span>
+            <p id="digit-count-${i}" class="text-[9px] sm:text-[10px] text-gray-500 font-mono">0x</p>
+          </div>
+        `;
+        grid.appendChild(card);
+      }
+    }
+
+    function onContractTypeChange() {
+      activeContractType = document.getElementById('contractTypeSelect').value;
+      activeBarrier = parseInt(document.getElementById('barrierInput').value, 10) || 4;
+      
+      const blueLabel = document.getElementById('blueCircleLabel');
+      const redLabel = document.getElementById('redCircleLabel');
+
+      if (activeContractType === 'EVEN_ODD') { 
+        blueLabel.textContent = 'EVEN'; 
+        redLabel.textContent = 'ODD'; 
+      } else if (activeContractType === 'OVER_UNDER') {
+        blueLabel.textContent = `OVER ${activeBarrier}`; 
+        redLabel.textContent = `UNDER ${activeBarrier}`;
+      } else if (activeContractType === 'MATCHES_DIFFERS') {
+        blueLabel.textContent = `MATCH ${activeBarrier}`; 
+        redLabel.textContent = `DIFFERS ${activeBarrier}`;
+      }
+    }
+
+    function onSymbolChange() {
+      activeSymbol = document.getElementById('symbolSelect').value;
+      if (isConnected) {
+        if (mode === 'live') {
+          subscribeToSymbol();
+        } else {
+          tickHistory = [];
+        }
+      }
+    }
+
+    function startTerminal() {
+      isManualStop = false;
+      activeSymbol = document.getElementById('symbolSelect').value;
+      activeBarrier = parseInt(document.getElementById('barrierInput').value, 10) || 4;
+
+      if (mode === 'sim') {
+        startSimulation();
+      } else {
+        startWebSocket();
+      }
+    }
+
+    function startWebSocket() {
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+
+      const appId = document.getElementById('appIdInput').value.trim() || '1089';
+      updateStatus('Connecting...', 'yellow');
+
+      const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`;
+
+      try {
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+          isConnected = true;
+          reconnectAttempts = 0;
+          updateStatus('Connected', 'green');
+          toggleControls(true);
+
+          // 1. Keepalive Ping every 30s
+          if (pingInterval) clearInterval(pingInterval);
+          pingInterval = setInterval(() => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({ ping: 1 }));
+            }
+          }, 30000);
+
+          // 2. Clear old subscriptions and request ticks
+          subscribeToSymbol();
+        };
+
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+
+            if (data.error) {
+              console.warn('Deriv WS Error:', data.error);
+              if (data.error.code === 'InvalidAppId') {
+                updateStatus('Invalid App ID', 'red');
+                stopTerminal(false, true);
+              }
+              return;
+            }
+
+            if (data.msg_type === 'history' && data.history) {
+              const prices = data.history.prices || [];
+              const pip = data.pip_size || 2;
+              tickHistory = prices.map(p => extractLastDigit(p, pip));
+              updateAnalyticsUI();
+            } else if (data.msg_type === 'tick' && data.tick) {
+              const quote = data.tick.quote;
+              const pip = data.tick.pip_size !== undefined ? data.tick.pip_size : 2;
+              const digit = extractLastDigit(quote, pip);
+
+              tickHistory.push(digit);
+              if (tickHistory.length > 100) tickHistory.shift();
+
+              document.getElementById('lastTickDisplay').textContent = `Quote: ${quote} | Digit: ${digit}`;
+              updateAnalyticsUI();
+              evaluateStrategySignals(data.tick, digit);
+            }
+          } catch (err) {
+            console.error('Error parsing WS message:', err);
+          }
+        };
+
+        socket.onerror = (err) => {
+          console.warn('WebSocket error observed:', err);
+        };
+
+        socket.onclose = () => {
+          cleanUpWSState();
+
+          if (!isManualStop) {
+            reconnectAttempts++;
+            if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+              updateStatus('WS Failed -> Switching to Sim', 'yellow');
+              setTimeout(() => {
+                setMode('sim');
+                startTerminal();
+              }, 1500);
+            } else {
+              updateStatus(`Reconnecting (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`, 'yellow');
+              setTimeout(() => {
+                if (!isManualStop && mode === 'live') startWebSocket();
+              }, 3000);
+            }
+          } else {
+            updateStatus('Disconnected', 'gray');
+          }
+        };
+      } catch (e) {
+        updateStatus('WS Exception', 'red');
+      }
+    }
+
+    function subscribeToSymbol() {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+      // Forget previous subscriptions to prevent duplicated stream bug
+      socket.send(JSON.stringify({ forget_all: 'ticks' }));
+
+      // Request history backfill
+      socket.send(JSON.stringify({
+        ticks_history: activeSymbol,
+        adjust_start_time: 1,
+        count: 100,
+        end: 'latest',
+        start: 1,
+        style: 'ticks'
+      }));
+
+      // Subscribe to real-time tick stream
+      socket.send(JSON.stringify({
+        ticks: activeSymbol,
+        subscribe: 1
+      }));
+    }
+
+    function startSimulation() {
+      isConnected = true;
+      toggleControls(true);
+      updateStatus('SIMULATION LIVE', 'green');
+
+      let currentPrice = 1234.50;
+
+      if (simInterval) clearInterval(simInterval);
+      simInterval = setInterval(() => {
+        const change = (Math.random() - 0.49) * 0.5;
+        currentPrice = Math.max(10, currentPrice + change);
+        const quote = currentPrice.toFixed(2);
+        const digit = parseInt(quote.slice(-1), 10);
+
+        tickHistory.push(digit);
+        if (tickHistory.length > 100) tickHistory.shift();
+
+        document.getElementById('lastTickDisplay').textContent = `Sim Quote: ${quote} | Digit: ${digit}`;
+        updateAnalyticsUI();
+        evaluateStrategySignals({ quote: quote }, digit);
+      }, 1000);
+    }
+
+    function extractLastDigit(quote, pipSize = 2) {
+      if (quote === undefined || quote === null) return 0;
+      const formatted = Number(quote).toFixed(pipSize);
+      const str = formatted.toString();
+      return parseInt(str.charAt(str.length - 1), 10) || 0;
+    }
+
+    function stopTerminal(clear = true, manual = true) {
+      isManualStop = manual;
+      cleanUpWSState();
+
+      if (simInterval) {
+        clearInterval(simInterval);
+        simInterval = null;
+      }
+
+      isConnected = false;
+      updateStatus('Disconnected', 'gray');
+      toggleControls(false);
+      resetGlowCircles();
+
+      if (clear) { 
+        tickHistory = []; 
+        renderDigitsGrid();
+        document.getElementById('sampleCountDisplay').textContent = '0';
+      }
+    }
+
+    function cleanUpWSState() {
+      if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+      }
+      if (socket) {
+        try {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ forget_all: 'ticks' }));
+          }
+          socket.close();
+        } catch(e){}
+        socket = null;
+      }
+    }
+
+    function updateAnalyticsUI() {
+      if (tickHistory.length === 0) return;
+      const total = tickHistory.length;
+      document.getElementById('sampleCountDisplay').textContent = total;
+
+      const counts = Array(10).fill(0);
+      let even = 0;
+      tickHistory.forEach(d => { counts[d]++; if(d % 2 === 0) even++; });
+
+      const evenPct = ((even / total) * 100).toFixed(1);
+      document.getElementById('evenPercentage').textContent = `${evenPct}%`;
+      document.getElementById('oddPercentage').textContent = `${(100 - evenPct).toFixed(1)}%`;
+
+      let max = Math.max(...counts), min = Math.min(...counts);
+
+      for (let i = 0; i <= 9; i++) {
+        const pct = total > 0 ? ((counts[i] / total) * 100).toFixed(1) : '0.0';
+        document.getElementById(`digit-bar-${i}`).style.height = `${Math.min(pct * 2.8, 100)}%`;
+        document.getElementById(`digit-percent-${i}`).textContent = `${pct}%`;
+        document.getElementById(`digit-count-${i}`).textContent = `${counts[i]}x`;
+
+        const card = document.getElementById(`digit-card-${i}`);
+        const badge = document.getElementById(`digit-badge-${i}`);
+
+        if (counts[i] === max && max > 0) {
+          card.className = 'bg-darkBg border-2 border-emerald-500/80 rounded-lg p-2.5 flex flex-col items-center justify-between h-40 sm:h-44 relative overflow-hidden shadow-lg shadow-emerald-950/40';
+          badge.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase font-mono';
+          badge.textContent = 'HOT';
+        } else if (counts[i] === min && total >= 10) {
+          card.className = 'bg-darkBg border-2 border-rose-500/80 rounded-lg p-2.5 flex flex-col items-center justify-between h-40 sm:h-44 relative overflow-hidden shadow-lg shadow-rose-950/40';
+          badge.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 uppercase font-mono';
+          badge.textContent = 'COLD';
+        } else {
+          card.className = 'bg-darkBg border border-darkBorder rounded-lg p-2.5 flex flex-col items-center justify-between h-40 sm:h-44 relative overflow-hidden';
+          badge.className = 'opacity-0 text-[9px] font-mono';
+        }
+      }
+    }
+
+    function evaluateStrategySignals(tick, digit) {
+      if (tickHistory.length < 5) return;
+
+      const recent = tickHistory.slice(-10);
+      let action = 'NO SIGNAL';
+      let confidence = 0;
+      let targetDigit = '--';
+      let rationale = '';
+      let isPositive = false;
+      let isNegative = false;
+
+      if (activeContractType === 'EVEN_ODD') {
+        let evenStreak = 0, oddStreak = 0;
+        for (let i = recent.length - 1; i >= 0; i--) {
+          if (recent[i] % 2 === 0) {
+            if (oddStreak > 0) break;
+            evenStreak++;
+          } else {
+            if (evenStreak > 0) break;
+            oddStreak++;
+          }
+        }
+
+        if (evenStreak >= 3) {
+          action = 'ENTER ODD';
+          confidence = Math.min(65 + (evenStreak * 8), 95);
+          targetDigit = 'ODD (1,3,5,7,9)';
+          rationale = `Detected ${evenStreak} consecutive EVEN digits. High mean-reversion edge calculated for ODD.`;
+          isNegative = true;
+        } else if (oddStreak >= 3) {
+          action = 'ENTER EVEN';
+          confidence = Math.min(65 + (oddStreak * 8), 95);
+          targetDigit = 'EVEN (0,2,4,6,8)';
+          rationale = `Detected ${oddStreak} consecutive ODD digits. High mean-reversion edge calculated for EVEN.`;
+          isPositive = true;
+        } else {
+          rationale = `Market distribution balanced. Waiting for 3+ streak pattern.`;
+        }
+      } else if (activeContractType === 'OVER_UNDER') {
+        const overCount = recent.filter(d => d > activeBarrier).length;
+        const underCount = recent.filter(d => d < activeBarrier).length;
+
+        if (underCount >= 6) {
+          action = `ENTER OVER ${activeBarrier}`;
+          confidence = 82;
+          targetDigit = `> ${activeBarrier}`;
+          rationale = `${underCount}/10 recent ticks fell UNDER barrier ${activeBarrier}. Mean-reversion OVER active.`;
+          isPositive = true;
+        } else if (overCount >= 6) {
+          action = `ENTER UNDER ${activeBarrier}`;
+          confidence = 82;
+          targetDigit = `< ${activeBarrier}`;
+          rationale = `${overCount}/10 recent ticks fell OVER barrier ${activeBarrier}. Mean-reversion UNDER active.`;
+          isNegative = true;
+        } else {
+          rationale = `Distribution neutral around barrier ${activeBarrier}.`;
+        }
+      } else if (activeContractType === 'MATCHES_DIFFERS') {
+        const matchCount = recent.filter(d => d === activeBarrier).length;
+        if (matchCount >= 2) {
+          action = `ENTER DIFFERS ${activeBarrier}`;
+          confidence = 88;
+          targetDigit = `≠ ${activeBarrier}`;
+          rationale = `Digit ${activeBarrier} clustered ${matchCount} times recently. High probability for DIFFERS.`;
+          isNegative = true;
+        } else {
+          rationale = `Barrier ${activeBarrier} frequency normal (${matchCount}/10). Awaiting cluster.`;
+        }
+      }
+
+      document.getElementById('recommendedAction').textContent = action;
+      document.getElementById('targetPrediction').textContent = targetDigit;
+      document.getElementById('confidenceScore').textContent = `${confidence}%`;
+      document.getElementById('confidenceBar').style.width = `${confidence}%`;
+      document.getElementById('strategyRationale').textContent = rationale;
+
+      if (isPositive) {
+        triggerCircleGlow('blue');
+        updateSignalBadge(action, 'blue');
+        startTimer(5);
+        playBeep(800, 'sine', 0.12);
+        addLog(new Date().toLocaleTimeString(), activeSymbol, activeContractType, tick.quote, digit, action, `${confidence}%`);
+      } else if (isNegative) {
+        triggerCircleGlow('red');
+        updateSignalBadge(action, 'red');
+        startTimer(5);
+        playBeep(450, 'sawtooth', 0.15);
+        addLog(new Date().toLocaleTimeString(), activeSymbol, activeContractType, tick.quote, digit, action, `${confidence}%`);
+      } else {
+        resetGlowCircles();
+        updateSignalBadge('WAITING', 'gray');
+      }
+    }
+
+    function triggerCircleGlow(color) {
+      const blueCircle = document.getElementById('blueCircle');
+      const redCircle = document.getElementById('redCircle');
+      const blueVal = document.getElementById('blueCircleVal');
+      const redVal = document.getElementById('redCircleVal');
+
+      if (color === 'blue') {
+        blueCircle.className = 'w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-blue-400 bg-blue-600/30 flex flex-col items-center justify-center transition-all duration-300 pulse-glow-blue';
+        blueVal.textContent = 'TRIGGER';
+        redCircle.className = 'w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-gray-800 bg-gray-900/40 flex flex-col items-center justify-center opacity-40';
+        redVal.textContent = 'IDLE';
+      } else {
+        redCircle.className = 'w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-rose-400 bg-rose-600/30 flex flex-col items-center justify-center transition-all duration-300 pulse-glow-red';
+        redVal.textContent = 'TRIGGER';
+        blueCircle.className = 'w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-gray-800 bg-gray-900/40 flex flex-col items-center justify-center opacity-40';
+        blueVal.textContent = 'IDLE';
+      }
+    }
+
+    function resetGlowCircles() {
+      document.getElementById('blueCircle').className = 'w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-gray-800 bg-blue-950/20 flex flex-col items-center justify-center transition-all duration-300';
+      document.getElementById('blueCircleVal').textContent = 'IDLE';
+      document.getElementById('redCircle').className = 'w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-gray-800 bg-rose-950/20 flex flex-col items-center justify-center transition-all duration-300';
+      document.getElementById('redCircleVal').textContent = 'IDLE';
+    }
+
+    function startTimer(seconds = 5) {
+      if (countdownTimer) clearInterval(countdownTimer);
+      let rem = seconds;
+      document.getElementById('timerDisplay').textContent = `${rem} Ticks`;
+      countdownTimer = setInterval(() => {
+        rem--;
+        if (rem <= 0) {
+          clearInterval(countdownTimer);
+          document.getElementById('timerDisplay').textContent = 'EXPIRED';
+          resetGlowCircles();
+        } else {
+          document.getElementById('timerDisplay').textContent = `${rem} Ticks`;
+        }
+      }, 1000);
+    }
+
+    function updateSignalBadge(text, color) {
+      const badge = document.getElementById('signalBadge');
+      if (color === 'blue') {
+        badge.className = 'px-3 py-1 rounded border border-blue-500/50 bg-blue-500/20 text-xs font-mono text-blue-300 font-bold animate-pulse';
+      } else if (color === 'red') {
+        badge.className = 'px-3 py-1 rounded border border-rose-500/50 bg-rose-500/20 text-xs font-mono text-rose-300 font-bold animate-pulse';
+      } else {
+        badge.className = 'px-3 py-1 rounded border border-gray-700 bg-gray-800 text-xs font-mono text-gray-400 font-bold';
+      }
+      badge.textContent = text;
+    }
+
+    function addLog(time, symbol, contract, quote, digit, signal, conf) {
+      const tbody = document.getElementById('logsTableBody');
+      if (tbody.children.length === 1 && tbody.children[0].children.length === 1) {
+        tbody.innerHTML = '';
+      }
+
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-darkBg/50 transition-colors';
+      const sigColor = signal.includes('EVEN') || signal.includes('OVER') || signal.includes('MATCH') ? 'text-blue-400 font-bold' : 'text-rose-400 font-bold';
+
+      tr.innerHTML = `
+        <td class="py-2 px-3 text-gray-400">${time}</td>
+        <td class="py-2 px-3 font-bold text-gray-200">${symbol}</td>
+        <td class="py-2 px-3 text-gray-300">${contract}</td>
+        <td class="py-2 px-3 text-gray-200 font-mono">${quote}</td>
+        <td class="py-2 px-3"><span class="px-2 py-0.5 rounded bg-gray-800 text-amber-400 font-bold font-mono">${digit}</span></td>
+        <td class="py-2 px-3 ${sigColor}">${signal}</td>
+        <td class="py-2 px-3 text-emerald-400 font-bold font-mono">${conf}</td>
+      `;
+
+      tbody.insertBefore(tr, tbody.firstChild);
+      if (tbody.children.length > 25) tbody.removeChild(tbody.lastChild);
+    }
+
+    function updateStatus(text, color) {
+      document.getElementById('statusText').textContent = text;
+      const dot = document.getElementById('statusDot');
+      dot.className = `w-2.5 h-2.5 rounded-full inline-block ${color==='green' ? 'bg-emerald-500' : color==='yellow' ? 'bg-amber-500 animate-ping' : 'bg-rose-500'}`;
+    }
+
+    function toggleControls(active) {
+      document.getElementById('startBtn').disabled = active;
+      document.getElementById('startBtn').className = active 
+        ? 'flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-900/30 border border-emerald-800/40 text-gray-400 font-semibold text-xs opacity-50 cursor-not-allowed'
+        : 'flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all shadow-lg hover:shadow-emerald-900/40 active:scale-[0.98]';
+
+      document.getElementById('stopBtn').disabled = !active;
+      document.getElementById('stopBtn').className = !active
+        ? 'flex items-center gap-2 px-3.5 py-2 rounded-lg bg-rose-900/30 border border-rose-800/40 text-gray-400 font-semibold text-xs opacity-50 cursor-not-allowed'
+        : 'flex items-center gap-2 px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-all shadow-lg hover:shadow-rose-900/40 active:scale-[0.98]';
+    }
+
+    function clearLogs() {
+      document.getElementById('logsTableBody').innerHTML = `<tr><td colspan="7" class="py-4 text-center text-gray-500 italic font-sans">Log cleared. Awaiting new tick signals...</td></tr>`;
+    }
+  </script>
+</body>
+</html>
+```
